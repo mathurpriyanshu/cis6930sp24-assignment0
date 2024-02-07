@@ -6,18 +6,17 @@ from pypdf import PdfReader
 import argparse
 
 
-def download_pdf(url, headers):
+def fetchincidents(url, headers):
     data = urllib.request.urlopen(urllib.request.Request(url, headers=headers)).read()
     return BytesIO(data)
 
 
-def extract_text_from_pdf(pdf_file):
+def extractincidents(pdf_file):
     reader = PdfReader(pdf_file)
-    text = reader.pages[0].extract_text()
-    return reader, text
+    return reader
 
 
-def create_database(db):
+def createdb(db):
     dbase = sqlite3.connect(db)
     cursor = dbase.cursor()
     command_insert = """CREATE TABLE IF NOT EXISTS incidents (
@@ -31,107 +30,93 @@ def create_database(db):
     return dbase, cursor
 
 
-def insert_data_into_database(reader, cursor):
-    num_pages = len(reader.pages)
-    for i in range(0, num_pages):
-        page = reader.pages[i]
+def populatedb(reader, cursor):
+    for i, page in enumerate(reader.pages):
         text = page.extract_text()
         table_text = text.split('\n')
+        
         if i == 0:
-            table_text.pop(0)
-            table_text.pop(len(table_text) - 1)
-            table_text[len(table_text)-1]=table_text[len(table_text) - 1].replace("NORMAN POLICE DEPARTMENT", "")  
-        elif i == num_pages - 1:
-            table_text.pop(len(table_text) - 1)
-        for k in range(0, len(table_text)):
-            line_text = table_text[k].split(' ')
-            string = ''
-            final_dict = {'Date / Time': line_text[0]+' '+line_text[1]}
-            final_dict['Incident Number'] = line_text[2]
-            final_dict['Incident ORI'] = line_text[-1]
-            line_text.remove(line_text[0])
-            line_text.remove(line_text[0])
-            line_text.remove(line_text[0])
-            line_text.remove(line_text[-1])
-            for j in range(0, len(line_text)):
-                if any(c.islower() for c in line_text[j]) :
-                    for a in range (j, len(line_text)):
-                        if line_text[a-1] == '911':
-                            string += line_text[a-1] + ' '
-                        string += line_text[a] + ' ' 
-                    break
-                elif line_text[j] == 'COP':
-                    string += line_text[j] + ' '
-                elif line_text[j] == 'EMS':
-                    string += line_text[j] + ' '
-                elif line_text[j] == 'DDACTS':
-                    string += line_text[j] + ' '
-                elif line_text[j] == 'MVA':
-                    string += line_text[j] + ' '
-
-            final_dict['Incident Type'] = string.strip()
-            final_dict['Location'] = ' '.join(line_text).replace(string.strip(), '').strip()
+            table_text = table_text[1:-1]
+            table_text[-1] = table_text[-1].replace("NORMAN POLICE DEPARTMENT", "")  
+        elif i == len(reader.pages) - 1:
+            table_text.pop()
+        
+        for line in table_text:
+            line_text = line.split(' ')
+            date_time = ' '.join(line_text[:2])
+            incident_number = line_text[2]
+            incident_ori = line_text[-1]
+            
+            # Remove unnecessary elements from line_text
+            line_text = line_text[3:-1]
+            
+            # Extract Incident Type and Location
+            incident_type = ''
+            location = ''
+            for word in line_text:
+                if any(c.islower() for c in word) or word in {'COP', 'EMS', 'DDACTS', 'MVA'}:
+                    incident_type += word + ' '
+                else:
+                    location += word + ' '
+            
+            # Remove extra whitespaces
+            incident_type = incident_type.strip()
+            location = location.strip()
+            
             try:
-                cursor.execute("INSERT INTO incidents VALUES (?, ?, ?, ?, ?)", (final_dict['Date / Time'], final_dict['Incident Number'], final_dict['Location'], final_dict['Incident Type'], final_dict['Incident ORI']))
+                cursor.execute("INSERT INTO incidents VALUES (?, ?, ?, ?, ?)", (date_time, incident_number, location, incident_type, incident_ori))
             except Error as e:
                 print(e)
-                print(final_dict)
+                print({
+                    'Date / Time': date_time,
+                    'Incident Number': incident_number,
+                    'Location': location,
+                    'Incident Type': incident_type,
+                    'Incident ORI': incident_ori
+                })
 
 
 def main(url):
-    # url = (
-    #     "https://www.normanok.gov/sites/default/files/documents/"
-    #     "2024-01/2024-01-01_daily_incident_summary.pdf"
-    # )
     headers = {}
     headers[
         "User-Agent"
     ] = "Mozilla/5.0 (X11; Linux i686) AppleWebKit/537.17 (KHTML, like Gecko) Chrome/24.0.1312.27 Safari/537.17"
     
-    pdf_file = download_pdf(url, headers)
-    reader, text = extract_text_from_pdf(pdf_file)
-    db = 'resources/normanpd.db'
-    dbase, cursor = create_database(db)
-    insert_data_into_database(reader, cursor)
+    pdf_file = fetchincidents(url, headers)
+    reader = extractincidents(pdf_file)
+    db = './resources/normanpd.db'
+    dbase, cursor = createdb(db)
+    populatedb(reader, cursor)
     dbase.commit()
 
-    # command_status = """select nature, count(distinct incident_number) from incidents group by nature order by count(incident_number) desc, nature asc"""
-    # cursor.execute(command_status)
+    
+    command_status = """select nature, count() from incidents group by nature order by count() desc, nature asc"""
+    output = cursor.execute(command_status)
 
-    # for row in cursor.fetchall():
-    #     print(row[0]+'|', row[1])
-    # dbase.close()
-
-    # def status(db):
-    # current =  dbase.cursor()
-    data = cursor.execute("""
-                SELECT nature, COUNT(*)
-                FROM incidents
-                GROUP BY nature
-                ORDER BY COUNT(*) DESC, NATURE ASC;
-                """)
         
-    blank_count = 0
-    for (nature, count) in data:
+    blanks = 0
+    for (nature, count) in output:
         if nature:
             print(f"{nature}|{count}")
         else:
-            blank_count = count
+            blanks = count
     
-    if blank_count > 0:
+    if blanks > 0:
         print(f"|{count}")
     
     cursor.close()
 
-    # def disconnectdb(conn):
-    # conn.close()
 
 
-if _name_ == '_main_':
+
+if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--incidents", type=str, required=True, 
                          help="Incident summary url.")
      
     args = parser.parse_args()
     if args.incidents:
+       
         main(args.incidents)
+
+
