@@ -6,6 +6,8 @@ name = "pypi"
 [packages]
 pytest = "*"
 pypdf = "*"
+e = "*"
+assignment0 = {file = "."}
 
 [dev-packages]
 
