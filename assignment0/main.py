@@ -1,5 +1,4 @@
 import os
-
 import pypdf
 import re
 import sqlite3
@@ -8,7 +7,7 @@ import urllib
 import urllib.request
 from assignment0.constants import strings
 
-def download_data(url):
+def pdf_download(url):
     headers = {}
     headers['User-Agent'] = "Mozilla/5.0 (X11; Linux i686) AppleWebKit/537.17 (KHTML, like Gecko) Chrome/24.0.1312.27 Safari/537.17"
 
@@ -19,7 +18,7 @@ def download_data(url):
 
     return local_file_path
 
-def extract_data_from_pdf(pdf_path):
+def data_extract(pdf_path):
     with open(pdf_path, 'rb') as file:
         pdf_reader = pypdf.PdfReader(pdf_path)
         text = ""
@@ -36,31 +35,28 @@ def extract_data_from_pdf(pdf_path):
         if(l != ""):
             date_pattern = r'\d{1,2}/\d{1,2}/\d{4} \d{1,2}:\d{2}'
 
-            # Find all occurrences of the date pattern in the line
             matches = re.finditer(date_pattern, l)
 
-            # If there are matches, split the line at each match
             if matches:
                 indices = [match.start() for match in matches]
                 matched_lines = [l[i:j].strip() for i, j in zip([0] + indices, indices + [None])]
 
-                # Filter out empty lines
                 matched_lines = list(filter(None, matched_lines))
                 for ml in matched_lines:
                     split_line = re.split("   ", ml)
                     non_empty_list = [value for value in split_line if value is not None and value != ""]
-                    extract_fields(non_empty_list, data)
+                    fields_extraction(non_empty_list, data)
 
             else:
                 matched_lines =  [l.strip()]
                 split_line = re.split("   ", l)
 
                 non_empty_list = [value for value in split_line if value is not None and value != ""]
-                extract_fields(non_empty_list, data)
+                fields_extraction(non_empty_list, data)
 
     return data
 
-def extract_fields(non_empty_list, data):
+def fields_extraction(non_empty_list, data):
     if(len(non_empty_list) == 5):
         categories = ["Date/Time", "Incident Number", "Location", "Nature", "Incident ORI"]
         date_time = non_empty_list[0].strip()
@@ -79,7 +75,6 @@ def extract_fields(non_empty_list, data):
             strings.field_names["incident_type"]: incident_type
         }
 
-        # Append the data to the list
         data.append(extracted_data)
 
     else:
@@ -98,19 +93,19 @@ def extract_fields(non_empty_list, data):
 
         data.append(extracted_data)
 
-def connectdb():
+def db_connection():
     con = sqlite3.connect(strings.dbstrings["db_path"])
     cur = con.cursor()
 
     return (cur, con)
 
-def createdb():
-    (cur, con) = connectdb()
+def db_creation():
+    (cur, con) = db_connection()
     statement = cur.execute(strings.dbstrings["create_db"])
     return statement
 
-def populatedb(result : list[dict[str, str]]):
-    (cur, con) = connectdb()
+def db_population(result : list[dict[str, str]]):
+    (cur, con) = db_connection()
     query_string = strings.dbstrings["insert_db"]
     for entry in result:
         query_string = query_string + "(" + "\'" + entry.get(strings.field_names["date_time"]) + "\'" + "," +  "\'" + entry.get(strings.field_names["incident_number"]) + "\'" + "," + "\'" + entry.get(strings.field_names["location"]) + "\'" + "," + "\'" + entry.get(strings.field_names["nature"]) + "\'" + "," + "\'" + entry.get(strings.field_names["incident_type"]) + "\'" + ")" + ","
@@ -122,9 +117,8 @@ def populatedb(result : list[dict[str, str]]):
     return statement.rowcount
 
 def status():
-    # query_string = "SELECT nature, COUNT(*) AS nature_count FROM incidents GROUP BY nature"
     query_string = strings.dbstrings["select_db"]
-    (cur, con) = connectdb()
+    (cur, con) = db_connection()
     statement = cur.execute(query_string)
     data = statement.fetchall()
     filtered_data_nature = [entry for entry in data if entry[0] != 'Nature' and entry[0] != 'NATURE' and entry[0] != 'RAMP']
@@ -146,28 +140,27 @@ def print_status():
 
     return final_str
 
-def getdb():
-    (cur, con) = connectdb()
+def db_get():
+    (cur, con) = db_connection()
     statement = cur.execute(strings.dbstrings["select_all_db"])
     return statement.fetchall()
 
-def deletedb():
-    (cur, con) = connectdb()
+def db_deletion():
+    (cur, con) = db_connection()
     statement = cur.execute(strings.dbstrings["drop_table"])
 
-def execute_functions(url):
-    pdf = download_data(url)
-    result = extract_data_from_pdf(pdf)
-    deletedb()
-    createdb()
-    populatedb(result)
+def fun_execute(url):
+    pdf = pdf_download(url)
+    result = data_extract(pdf)
+    db_deletion()
+    db_creation()
+    db_population(result)
     print_status()
-    delete_pdf(pdf)
+    pdf_deletion(pdf)
 
-def delete_pdf(pdf_path):
+def pdf_deletion(pdf_path):
     try:
         os.remove(pdf_path)
-        # print(f"Deleted PDF file: {pdf_path}")
     except FileNotFoundError:
         print(f"PDF file not found: {pdf_path}")
 
@@ -178,7 +171,7 @@ def main():
 
     if args.incidents:
         url = args.incidents
-        execute_functions(url)
+        fun_execute(url)
 
     else:
         print(strings.other["provide_incidents_url"])

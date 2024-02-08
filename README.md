@@ -2,19 +2,7 @@
 Name: Priyanshu Mathur
 
 # Assignment Description
-This Assignment is designed to fetch incident data from a PDF file containing daily incident summaries from the Norman Police Department's website. Here's an overview of its functionality:
-
-1. **Fetching PDF**: The `fetchincidents` function fetches the PDF file from the provided URL using `urllib.request` and returns a `BytesIO` object containing the file data.
-
-2. **Extracting Data from PDF**: The `extractincidents` function uses the `PdfReader` from the `pypdf` library to extract data from the PDF file.
-
-3. **Creating SQLite Database**: The `createdb` function establishes a connection to an SQLite database and creates a table named `incidents` to store incident data, including date, incident number, location, nature, and incident ORI.
-
-4. **Populating Database**: The `populatedb` function populates the SQLite database with data extracted from the PDF. It iterates over each page of the PDF, parses the text, extracts relevant information, and inserts it into the database table.
-
-5. **Main Function**: The `main` function orchestrates the execution of the entire process. It fetches the PDF, extracts data, creates/connects to the database, populates the database with incident data, executes a query to retrieve and print the count of incidents grouped by nature, and finally closes the database cursor.
-
-6. **Argument Parsing**: The script utilizes the `argparse` module to parse command-line arguments. It expects a single argument `--incidents`, representing the URL of the incident summary PDF file.
+This Assignment is designed to fetch incident data from a PDF file containing daily incident summaries from the Norman Police Department's website. We then store that data in a SQLite database after doing the extraction.
 
 
 # How to install
@@ -38,37 +26,28 @@ pipenv run python assignment0/main.py --incidents https://www.normanok.gov/sites
 
 # Functions
 
-1. **`fetchincidents(url, headers)`**:
-   - This function is responsible for fetching the PDF file from the specified URL.
-   - It uses `urllib.request.urlopen()` to make a request to the URL with custom headers.
-   - The response data is read and wrapped in a `BytesIO` object and returned.
-   - Parameters:
-     - `url`: The URL from which the PDF file is fetched.
-     - `headers`: Additional headers for the HTTP request.
+1. `pdf_download(url)`: This function downloads a PDF file from the given URL using urllib and saves it locally. It returns the local file path where the PDF is saved.
 
-2. **`extractincidents(pdf_file)`**:
-   - This function extracts data from the PDF file using the `PdfReader` from the `pypdf` library.
-   - It returns the reader object containing the PDF data.
-   - Parameters:
-     - `pdf_file`: A `BytesIO` object containing the PDF file data.
+2. `data_extract(pdf_path)`: This function extracts data from the PDF file specified by the `pdf_path`. It uses PyPDF2 to read the PDF, extracts text from each page, and then parses the text to extract relevant incident data such as date/time, incident number, location, nature, and incident type. The extracted data is returned as a list of dictionaries.
 
-3. **`createdb(db)`**:
-   - This function establishes a connection to an SQLite database and creates a table named `incidents`.
-   - It returns both the database connection (`dbase`) and a cursor object.
-   - Parameters:
-     - `db`: The path to the SQLite database file.
+3. `fields_extraction(non_empty_list, data)`: This function extracts fields from a non-empty list containing incident data and appends it to the `data` list. It handles cases where the list may contain missing values.
 
-4. **`populatedb(reader, cursor)`**:
-   - This function populates the SQLite database with data extracted from the PDF.
-   - It iterates over each page of the PDF, extracts relevant information, and inserts it into the database table.
-   - Parameters:
-     - `reader`: The PDF reader object containing the PDF data.
-     - `cursor`: The cursor object for executing SQL queries on the database.
+4. `db_connection()`: This function establishes a connection to the SQLite database using the path specified in the `dbstrings` constants. It returns a cursor object and a connection object.
 
-5. **`main(url)`**:
-   - This is the main function that orchestrates the entire process.
-   - It fetches the PDF, extracts data, creates/connects to the database, populates the database, executes a query to retrieve incident counts, and prints the results.
-   - Parameters:
-     - `url`: The URL of the incident summary PDF file.
+5. `db_creation()`: This function creates the necessary database tables using SQL statements specified in the `create_db` constant.
 
+6. `db_population(result)`: This function populates the database with the incident data extracted from the PDF file. It constructs and executes SQL INSERT statements based on the data provided in the `result` list.
 
+7. `status()`: This function retrieves the status of the database by executing a SELECT query specified in the `select_db` constant. It filters out unwanted data and sorts the results based on specific criteria.
+
+8. `print_status()`: This function prints the status of the database to the console and returns a formatted string containing the same information.
+
+9. `db_get()`: This function retrieves all data from the database by executing a SELECT query specified in the `select_all_db` constant.
+
+10. `db_deletion()`: This function deletes the database table using the SQL DROP TABLE statement specified in the `drop_table` constant.
+
+11. `fun_execute(url)`: This function serves as the main execution function. It orchestrates the downloading of the PDF file, extraction of data, database operations, printing of database status, and deletion of the PDF file.
+
+12. `pdf_deletion(pdf_path)`: This function deletes the PDF file specified by the `pdf_path` parameter.
+
+13. `main()`: This function is the entry point of the script. It parses command-line arguments using argparse to get the URL of the incidents data. Then, it calls the `fun_execute` function to execute the main functionality of the script. If no URL is provided, it prints a message asking for the incidents URL.
